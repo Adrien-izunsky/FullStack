@@ -1,203 +1,142 @@
 <template>
-  <div class="wrapper">
-    <form @submit.prevent="handleSubmit">
-      <!-- Choix de la personne -->
-      <div class="input-group">
-        <label for="person">Choisir une personne :</label>
-        <select v-model="person" required>
-          <option v-for="individu in individus" :key="individu.matricule" :value="individu.matricule">
-            {{ individu.nom }} {{ individu.prenom }}
+  <div class="enregistrer-participation">
+    <h2>Enregistrer une participation</h2>
+    <form @submit.prevent="enregistrerParticipation">
+      <!-- Sélection de la personne -->
+      <div class="form-group">
+        <label for="personne">Personne :</label>
+        <select id="personne" v-model="selectedPersonne" required>
+          <option v-for="personne in personnes" :key="personne.matricule" :value="personne.matricule">
+            {{ personne.prenom }} {{ personne.nom }} - ({{ personne.poste }})
           </option>
         </select>
       </div>
 
-      <!-- Choix du projet -->
-      <div class="input-group">
-        <label for="project">Choisir un projet :</label>
-        <select v-model="projet" required>
-          <option v-for="item in projets" :key="item.id" :value="item.id">
-            {{ item.nom }}
+      <!-- Sélection du projet -->
+      <div class="form-group">
+        <label for="projet">Projet :</label>
+        <select id="projet" v-model="selectedProjet" required>
+          <option v-for="projet in projets" :key="projet.id" :value="projet.id">
+            {{ projet.nom }} ({{ projet.debut }})
           </option>
         </select>
       </div>
 
-      <!-- Entrée du rôle -->
-      <div class="input-group">
-        <label for="role">Fonction :</label>
-        <input type="text" v-model="fonction" required />
+      <!-- Spécification du rôle -->
+      <div class="form-group">
+        <label for="role">Rôle :</label>
+        <input type="text" id="role" v-model="role" required />
       </div>
 
-      <!-- Curseur de pourcentage -->
-      <div class="input-group">
-        <label for="participation">Niveau de participation :</label>
-        <input
-          type="range"
-          v-model="participation"
-          min="0"
-          max="100"
-          step="1"
-          @input="afficherPourcentage"
-          :style="{ background: calculerFondCurseur() }"
-        />
-        <div class="pourcentage-valeur">
-          {{ participation }}%
-        </div>
+      <!-- Spécification du pourcentage de participation -->
+      <div class="form-group">
+        <label for="pourcentage">Pourcentage :</label>
+        <input type="range" id="pourcentage" v-model="pourcentage" min="0" max="100" step="1" required />
+        <span>{{ pourcentage }}%</span>
       </div>
 
-      <!-- Bouton d'envoi -->
-      <div class="bouton-zone">
-        <button type="submit">Soumettre</button>
-      </div>
+      <!-- Bouton d'enregistrement -->
+      <button type="submit">Enregistrer</button>
     </form>
 
-    <ErreurMessage v-if="messageErreur" :message="messageErreur" />
-    <p v-if="messageSucces" class="succes">{{ messageSucces }}</p>
+    <!-- Affichage des erreurs -->
+    <div v-if="errorMessage" class="error">{{ errorMessage }}</div>
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import ErreurMessage from './ErreurMessage.vue';
+<script setup>
+import { ref, onMounted } from "vue";
+import axios from "axios";
 
-export default {
-  components: { ErreurMessage },
-  data() {
-    return {
-      individus: [],
-      projets: [],
-      person: null,
-      projet: null,
-      fonction: '',
-      participation: 50,
-      messageErreur: null,
-      messageSucces: null,
-    };
-  },
-  mounted() {
-    this.chargerIndividus();
-    this.chargerProjets();
-  },
-  methods: {
-    async chargerIndividus() {
-      try {
-        const { data } = await axios.get("http://localhost:8989/api/personnes");
-        this.individus = data;
-      } catch (err) {
-        console.error("Erreur de chargement des individus :", err);
-        this.messageErreur = "Impossible de récupérer la liste des personnes.";
+const personnes = ref([]);
+const projets = ref([]);
+const selectedPersonne = ref(null);
+const selectedProjet = ref(null);
+const role = ref("");
+const pourcentage = ref(10); // Valeur par défaut
+const errorMessage = ref("");
+
+// Chargement des données au montage du composant
+onMounted(async () => {
+  try {
+    // Récupérer les personnes depuis l'API
+    const responsePersonnes = await axios.get("/api/personnes");
+    console.log("Personnes récupérées :", responsePersonnes.data);
+    personnes.value = responsePersonnes.data._embedded ? responsePersonnes.data._embedded.personnes : [];
+
+    // Récupérer les projets depuis l'API
+    const responseProjets = await axios.get("/api/projets");
+    console.log("Projets récupérés :", responseProjets.data);
+    projets.value = responseProjets.data._embedded ? responseProjets.data._embedded.projets : [];
+  } catch (error) {
+    console.error("Erreur lors de la récupération des données :", error);
+  }
+});
+
+// Fonction pour enregistrer une participation
+const enregistrerParticipation = async () => {
+  try {
+    await axios.post(
+      "http://localhost:8989/api/gestion/participation",
+      {},
+      {
+        params: {
+          matricule: selectedPersonne.value,
+          codeProjet: selectedProjet.value,
+          role: role.value,
+          pourcentage: pourcentage.value / 100, // Divisez par 100 pour obtenir une valeur entre 0.0 et 1.0
+        },
+        headers: {
+          'Content-Type': 'application/json',
+        },
       }
-    },
-
-    async chargerProjets() {
-      try {
-        const { data } = await axios.get("http://localhost:8989/api/projets");
-        this.projets = data;
-      } catch (err) {
-        console.error("Erreur de chargement des projets :", err);
-        this.messageErreur = "Impossible de récupérer la liste des projets.";
-      }
-    },
-
-    afficherPourcentage() {
-      console.log(`Participation actuelle : ${this.participation}%`);
-    },
-
-    async handleSubmit() {
-      const donnees = {
-        matricule: this.person,
-        codeProjet: this.projet,
-        role: this.fonction,
-        pourcentage: this.participation / 100,
-      };
-
-      try {
-        await axios.post("/api/gestion/participation", donnees, {
-          headers: { "Content-Type": "application/json" },
-        });
-        this.messageSucces = "Données enregistrées avec succès !";
-        this.messageErreur = null;
-      } catch (err) {
-        this.messageErreur = err.response?.data?.message || "Erreur lors de l'envoi des données.";
-        this.messageSucces = null;
-      }
-    },
-
-    calculerFondCurseur() {
-      return `linear-gradient(to right, green ${this.participation}%, #e0e0e0 ${this.participation}%)`;
-    },
-  },
+    );
+    alert("Participation enregistrée avec succès !");
+  } catch (error) {
+    if (error.response) {
+      errorMessage.value = error.response.data.message
+    } else {
+      errorMessage.value = 'Erreur lors de l’enregistrement.'
+    }
+  }
 };
 </script>
 
 <style scoped>
-.wrapper {
-  padding: 25px;
-  border: 1px solid #ddd;
-  border-radius: 10px;
-  background-color: #f0f0f0;
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-.input-group {
-  margin-bottom: 15px;
-  display: flex;
-  flex-direction: column;
-}
-
-.input-group label {
-  margin-bottom: 5px;
-  font-weight: bold;
-}
-
-input, select {
-  padding: 8px 10px;
-  border-radius: 5px;
+.enregistrer-participation {
+  max-width: 400px;
+  margin: auto;
+  padding: 20px;
   border: 1px solid #ccc;
-}
-
-input[type="range"] {
-  height: 8px;
-  appearance: none;
   border-radius: 5px;
 }
 
-input[type="range"]::-webkit-slider-thumb {
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  background-color: green;
-  border-radius: 50%;
+.form-group {
+  margin-bottom: 15px;
 }
 
-.pourcentage-valeur {
-  margin-top: 5px;
-  font-size: 16px;
-  color: #333;
+label {
+  display: block;
+  margin-bottom: 5px;
 }
 
-.bouton-zone {
-  display: flex;
-  justify-content: center;
+select, input {
+  width: 100%;
+  padding: 8px;
+  box-sizing: border-box;
 }
 
 button {
-  padding: 10px 20px;
-  background-color: green;
+  padding: 10px 15px;
+  background-color: #007bff;
   color: white;
   border: none;
   border-radius: 5px;
   cursor: pointer;
-  transition: background-color 0.3s;
 }
 
 button:hover {
-  background-color: darkgreen;
-}
-
-.succes {
-  color: green;
-  margin-top: 10px;
+  background-color: #0056b3;
 }
 
 .error {
